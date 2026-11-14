@@ -1,5 +1,6 @@
 import time
 import uuid
+from collections.abc import Mapping
 from unittest.mock import Mock
 
 import pytest
@@ -12,7 +13,7 @@ from graphon.file import File, FileTransferMethod, FileType
 from graphon.graph import Graph
 from graphon.nodes.if_else.entities import IfElseNodeData
 from graphon.nodes.if_else.if_else_node import IfElseNode
-from graphon.runtime import RuntimeState, VariablePool
+from graphon.runtime import InitParams, RuntimeState, VariablePool
 from graphon.utils.condition.entities import Condition, SubCondition, SubVariableCondition
 from graphon.variables import ArrayFileSegment
 from tests.workflow_test_utils import build_test_graph_init_params
@@ -20,9 +21,9 @@ from tests.workflow_test_utils import build_test_graph_init_params
 
 def _build_if_else_node(
     *,
-    node_data: IfElseNodeData | dict[str, object],
-    init_params,
-    runtime_state,
+    node_data: IfElseNodeData | Mapping[str, object],
+    init_params: InitParams,
+    runtime_state: RuntimeState,
 ) -> IfElseNode:
     return IfElseNode(
         node_id=str(uuid.uuid4()),
@@ -32,8 +33,11 @@ def _build_if_else_node(
     )
 
 
-def test_execute_if_else_result_true():
-    graph_config = {"edges": [], "nodes": [{"data": {"type": "start", "title": "Start"}, "id": "start"}]}
+def test_execute_if_else_result_true() -> None:
+    graph_config: dict[str, object] = {
+        "edges": list[object](),
+        "nodes": [{"data": {"type": "start", "title": "Start"}, "id": "start"}],
+    }
 
     init_params = build_test_graph_init_params(
         workflow_id="1",
@@ -131,9 +135,12 @@ def test_execute_if_else_result_true():
     assert result.outputs["result"] is True
 
 
-def test_execute_if_else_result_false():
+def test_execute_if_else_result_false() -> None:
     # Create a simple graph for IfElse node testing
-    graph_config = {"edges": [], "nodes": [{"data": {"type": "start", "title": "Start"}, "id": "start"}]}
+    graph_config: dict[str, object] = {
+        "edges": list[object](),
+        "nodes": [{"data": {"type": "start", "title": "Start"}, "id": "start"}],
+    }
 
     init_params = build_test_graph_init_params(
         workflow_id="1",
@@ -192,7 +199,7 @@ def test_execute_if_else_result_false():
     assert result.outputs["result"] is False
 
 
-def test_array_file_contains_file_name():
+def test_array_file_contains_file_name() -> None:
     node_data = IfElseNodeData(
         title="123",
         logical_operator="and",
@@ -223,7 +230,7 @@ def test_array_file_contains_file_name():
     # Create properly configured mock for graph_init_params
     graph_init_params = Mock()
     graph_init_params.workflow_id = "test_workflow"
-    graph_init_params.graph_config = {}
+    graph_init_params.graph_config = dict[str, object]()
     graph_init_params.call_depth = 0
     graph_init_params.run_context = {
         DIFY_RUN_CONTEXT_KEY: {
@@ -237,7 +244,9 @@ def test_array_file_contains_file_name():
 
     node = _build_if_else_node(node_data=node_data, init_params=graph_init_params, runtime_state=Mock())
 
-    node.runtime_state.variable_pool.get.return_value = ArrayFileSegment(
+    get_selector = node.runtime_state.variable_pool.get
+    assert isinstance(get_selector, Mock)
+    get_selector.return_value = ArrayFileSegment(
         value=[
             File(
                 file_type=FileType.IMAGE,
@@ -256,8 +265,8 @@ def test_array_file_contains_file_name():
     assert result.outputs["result"] is True
 
 
-def _get_test_conditions():
-    conditions = [
+def _get_test_conditions() -> list[Condition]:
+    conditions: list[dict[str, object]] = [
         # Test boolean "is" operator
         {"comparison_operator": "is", "variable_selector": ["start", "bool_true"], "value": "true"},
         # Test boolean "is not" operator
@@ -280,14 +289,17 @@ def _get_test_conditions():
     return [Condition.model_validate(i) for i in conditions]
 
 
-def _get_condition_test_id(c: Condition):
+def _get_condition_test_id(c: Condition) -> str:
     return c.comparison_operator
 
 
 @pytest.mark.parametrize("condition", _get_test_conditions(), ids=_get_condition_test_id)
-def test_execute_if_else_boolean_conditions(condition: Condition):
+def test_execute_if_else_boolean_conditions(condition: Condition) -> None:
     """Test IfElseNode with boolean conditions using various operators"""
-    graph_config = {"edges": [], "nodes": [{"data": {"type": "start", "title": "Start"}, "id": "start"}]}
+    graph_config: dict[str, object] = {
+        "edges": list[object](),
+        "nodes": [{"data": {"type": "start", "title": "Start"}, "id": "start"}],
+    }
 
     init_params = build_test_graph_init_params(
         workflow_id="1",
@@ -336,9 +348,12 @@ def test_execute_if_else_boolean_conditions(condition: Condition):
     assert result.outputs["result"] is True
 
 
-def test_execute_if_else_boolean_false_conditions():
+def test_execute_if_else_boolean_false_conditions() -> None:
     """Test IfElseNode with boolean conditions that should evaluate to false"""
-    graph_config = {"edges": [], "nodes": [{"data": {"type": "start", "title": "Start"}, "id": "start"}]}
+    graph_config: dict[str, object] = {
+        "edges": list[object](),
+        "nodes": [{"data": {"type": "start", "title": "Start"}, "id": "start"}],
+    }
 
     init_params = build_test_graph_init_params(
         workflow_id="1",
@@ -398,9 +413,12 @@ def test_execute_if_else_boolean_false_conditions():
     assert result.outputs["result"] is False
 
 
-def test_execute_if_else_boolean_cases_structure():
+def test_execute_if_else_boolean_cases_structure() -> None:
     """Test IfElseNode with boolean conditions using the new cases structure"""
-    graph_config = {"edges": [], "nodes": [{"data": {"type": "start", "title": "Start"}, "id": "start"}]}
+    graph_config: dict[str, object] = {
+        "edges": list[object](),
+        "nodes": [{"data": {"type": "start", "title": "Start"}, "id": "start"}],
+    }
 
     init_params = build_test_graph_init_params(
         workflow_id="1",

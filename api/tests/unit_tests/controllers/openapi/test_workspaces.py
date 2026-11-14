@@ -92,12 +92,13 @@ def _handler[**P, R](api: object, method: str) -> Callable[Concatenate[object, P
     """Return the undecorated view `@endpoint` stashed on the decorated one.
 
     `_contract.py` attaches `__handler__` at decoration time, so it is absent from
-    the wrapped function's static type; reading it out of the instance dict keeps
+    the wrapped function's static type; reading it out of the attribute dict keeps
     the access honest instead of suppressing the diagnostic. `Concatenate[object, P]`
     carries the instance the view is called with, mirroring how the decorator stores
     an unbound function.
     """
-    handler: object = vars(getattr(api, method))["__handler__"]
+    view = type(api).__dict__[method]
+    handler: object = vars(view)["__handler__"]
     assert callable(handler)
     return handler
 

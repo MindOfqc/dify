@@ -1,3 +1,4 @@
+from collections.abc import Iterator, Sequence
 from types import SimpleNamespace
 
 import pandas as pd
@@ -14,14 +15,14 @@ from tests.helpers.unit.config_override import apply_config_overrides
 
 @pytest.fixture
 def database_session_maker(sqlite_engine: Engine, monkeypatch: pytest.MonkeyPatch) -> sessionmaker[Session]:
-    TypeBase.metadata.create_all(sqlite_engine, tables=[UploadFile.__table__])
+    TypeBase.metadata.create_all(sqlite_engine, tables=[TypeBase.metadata.tables[UploadFile.__tablename__]])
     session_maker = sessionmaker(bind=sqlite_engine, expire_on_commit=False)
     monkeypatch.setattr(excel_module.session_factory, "create_session", session_maker)
     return session_maker
 
 
 class _FakeCell:
-    def __init__(self, value, hyperlink=None):
+    def __init__(self, value: object, hyperlink: object = None) -> None:
         self.value = value
         self.hyperlink = hyperlink
         self.row = 0
@@ -29,12 +30,23 @@ class _FakeCell:
 
 
 class _FakeSheet:
-    def __init__(self, header_rows, data_rows, images=None):
+    def __init__(
+        self,
+        header_rows: Sequence[Sequence[object]],
+        data_rows: Sequence[Sequence[object]],
+        images: Sequence[object] | None = None,
+    ) -> None:
         self._header_rows = header_rows
         self._data_rows = data_rows
-        self._images = images or []
+        self._images: list[object] = list(images or [])
 
-    def iter_rows(self, min_row=1, max_row=None, max_col=None, values_only=False):
+    def iter_rows(
+        self,
+        min_row: int = 1,
+        max_row: int | None = None,
+        max_col: int | None = None,
+        values_only: bool = False,
+    ) -> Iterator[tuple[object, ...]]:
         if values_only:
             for row in self._header_rows:
                 yield tuple(row)
@@ -43,26 +55,27 @@ class _FakeSheet:
         for row_idx, row in enumerate(self._data_rows, start=min_row):
             materialized_row = tuple(row[:max_col] if max_col is not None else row)
             for col_idx, cell in enumerate(materialized_row, start=1):
-                cell.row = row_idx
-                cell.column = col_idx
+                if isinstance(cell, _FakeCell):
+                    cell.row = row_idx
+                    cell.column = col_idx
             yield materialized_row
 
 
 class _FakeWorkbook:
-    def __init__(self, sheets):
+    def __init__(self, sheets: dict[str, _FakeSheet]) -> None:
         self._sheets = sheets
         self.sheetnames = list(sheets.keys())
         self.closed = False
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> _FakeSheet:
         return self._sheets[key]
 
-    def close(self):
+    def close(self) -> None:
         self.closed = True
 
 
 class _FakeImage:
-    def __init__(self, data: bytes, row: int, col: int, image_format: str = "png"):
+    def __init__(self, data: bytes, row: int, col: int, image_format: str = "png") -> None:
         self._raw_data = data
         self.anchor = SimpleNamespace(_from=SimpleNamespace(row=row, col=col))
         self.format = image_format
@@ -71,7 +84,7 @@ class _FakeImage:
         return self._raw_data
 
 
-def _patch_image_persistence(monkeypatch: pytest.MonkeyPatch):
+def _patch_image_persistence(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, bytes]]:
     saves: list[tuple[str, bytes]] = []
 
     def save(key: str, data: bytes) -> None:
@@ -89,7 +102,7 @@ def _get_upload_files(session_maker: sessionmaker[Session]) -> list[UploadFile]:
 
 
 class TestExcelExtractor:
-    def test_extract_xlsx_with_hyperlinks_and_sheet_skip(self, monkeypatch: pytest.MonkeyPatch):
+    def test_extract_xlsx_with_hyperlinks_and_sheet_skip(self, monkeypatch: pytest.MonkeyPatch) -> None:
         sheet_with_data = _FakeSheet(
             header_rows=[("Name", "Link")],
             data_rows=[
@@ -116,7 +129,7 @@ class TestExcelExtractor:
         self,
         monkeypatch: pytest.MonkeyPatch,
         database_session_maker: sessionmaker[Session],
-    ):
+    ) -> None:
         image_bytes = b"\x89PNG\r\n\x1a\nexcel-image"
         sheet = _FakeSheet(
             header_rows=[("Question", "Answer", "Image")],
@@ -163,7 +176,7 @@ class TestExcelExtractor:
         self,
         monkeypatch: pytest.MonkeyPatch,
         database_session_maker: sessionmaker[Session],
-    ):
+    ) -> None:
         image_bytes = b"\x89PNG\r\n\x1a\nimage-only-row"
         sheet = _FakeSheet(
             header_rows=[("Question", "Answer", "Image")],
@@ -198,7 +211,7 @@ class TestExcelExtractor:
         self,
         monkeypatch: pytest.MonkeyPatch,
         database_session_maker: sessionmaker[Session],
-    ):
+    ) -> None:
         image_bytes = b"\x89PNG\r\n\x1a\nretry-safe-image"
         workbooks = [
             _FakeWorkbook(
@@ -243,11 +256,11 @@ class TestExcelExtractor:
         assert second_docs[0].page_content == expected_page_content
         assert len(saves) == 1
 
-    def test_extract_xls_path(self, monkeypatch: pytest.MonkeyPatch):
+    def test_extract_xls_path(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class FakeExcelFile:
             sheet_names = ["Sheet1"]
 
-            def parse(self, sheet_name):
+            def parse(self, sheet_name: str) -> pd.DataFrame:
                 assert sheet_name == "Sheet1"
                 return pd.DataFrame([{"A": "x", "B": 1}, {"A": None, "B": None}])
 
@@ -260,11 +273,11 @@ class TestExcelExtractor:
         assert docs[0].page_content == '"A":"x";"B":"1.0"'
         assert docs[0].metadata == {"source": "/tmp/sample.xls"}
 
-    def test_extract_xls_escapes_double_quotes_like_xlsx(self, monkeypatch: pytest.MonkeyPatch):
+    def test_extract_xls_escapes_double_quotes_like_xlsx(self, monkeypatch: pytest.MonkeyPatch) -> None:
         class FakeExcelFile:
             sheet_names = ["Sheet1"]
 
-            def parse(self, sheet_name):
+            def parse(self, sheet_name: str) -> pd.DataFrame:
                 return pd.DataFrame([{"note": 'he said "hi"', "plain": "text"}])
 
         monkeypatch.setattr(pd, "ExcelFile", lambda path, engine=None: FakeExcelFile())
@@ -275,13 +288,13 @@ class TestExcelExtractor:
         assert len(docs) == 1
         assert docs[0].page_content == '"note":"he said \\"hi\\"";"plain":"text"'
 
-    def test_extract_unsupported_extension_raises(self):
+    def test_extract_unsupported_extension_raises(self) -> None:
         extractor = ExcelExtractor("/tmp/sample.txt")
 
         with pytest.raises(ValueError, match="Unsupported file extension"):
             extractor.extract()
 
-    def test_find_header_and_columns_prefers_first_row_with_two_columns(self):
+    def test_find_header_and_columns_prefers_first_row_with_two_columns(self) -> None:
         sheet = _FakeSheet(
             header_rows=[(None, None, None), ("A", "B", None), ("X", None, None)],
             data_rows=[],
@@ -294,7 +307,7 @@ class TestExcelExtractor:
         assert column_map == {0: "A", 1: "B"}
         assert max_col_idx == 2
 
-    def test_find_header_and_columns_fallback_and_empty_case(self):
+    def test_find_header_and_columns_fallback_and_empty_case(self) -> None:
         extractor = ExcelExtractor("dummy.xlsx")
 
         fallback_sheet = _FakeSheet(header_rows=[("Only", None), (None, "Second")], data_rows=[])

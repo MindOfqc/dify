@@ -776,10 +776,10 @@ def test_post_uses_one_session_and_rolls_back_when_signal_fails(
     while not os.path.normpath(method.__code__.co_filename).endswith(
         os.path.join("controllers", "common", "session.py")
     ):
-        wrapped_view = getattr(method, "__wrapped__", None)
-        assert callable(wrapped_view)
-        method = wrapped_view
-    wrapped_view = getattr(method, "__wrapped__", None)
+        inner = vars(method).get("__wrapped__")
+        assert callable(inner)
+        method = inner
+    wrapped_view = vars(method)["__wrapped__"]
     assert callable(wrapped_view)
     assert os.path.normpath(wrapped_view.__code__.co_filename).endswith(
         os.path.join("controllers", "console", "app", "wraps.py")

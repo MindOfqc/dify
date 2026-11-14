@@ -1,8 +1,9 @@
 import datetime
 import sqlite3
 import time
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import closing
+from typing import cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,15 +22,19 @@ _SqlRepository = tuple[LogstoreAPIWorkflowNodeExecutionRepository, sqlite3.Conne
 
 
 def _new_logstore_repository() -> LogstoreAPIWorkflowNodeExecutionRepository:
-    """Build the adapter directly.
+    """Build the adapter through its constructor.
 
-    The class inherits its maintenance members from the repository protocol without implementing
-    them, so a plain call is rejected as an abstract instantiation. Allocate the instance
-    explicitly instead of silencing the check.
+    The adapter implements the members these tests exercise but not the full maintenance half of
+    the repository protocol, so the class is bound to a protocol-typed factory before it is called.
+    That keeps real construction — and therefore initialization and validation — on the test's path
+    instead of allocating the instance around it. The fixtures patch out endpoint connectivity, so
+    construction performs no network access.
     """
-    repository = object.__new__(LogstoreAPIWorkflowNodeExecutionRepository)
-    LogstoreAPIWorkflowNodeExecutionRepository.__init__(repository, session_maker=None)
-    return repository
+    factory = cast(
+        Callable[..., LogstoreAPIWorkflowNodeExecutionRepository],
+        LogstoreAPIWorkflowNodeExecutionRepository,
+    )
+    return factory(session_maker=None)
 
 
 @pytest.fixture
